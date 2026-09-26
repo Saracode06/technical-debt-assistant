@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Technical Debt Assistant</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ─── HEADER ─────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="container">
+    <div class="header-top">
+      <div>
+        <h1 class="site-title">Technical Debt Assistant</h1>
+        <p class="site-tagline">Detect, prioritize, remediate, and validate technical debt in a Python codebase.</p>
+      </div>
+      <span class="badge-ibm">IBM Bob 2.0 Hackathon</span>
+    </div>
+
+    <!-- Workflow indicator -->
+    <div class="workflow-bar">
+      <span class="wf-step" id="wf-scan">SCAN</span>
+      <span class="wf-arrow">→</span>
+      <span class="wf-step" id="wf-detect">DETECT</span>
+      <span class="wf-arrow">→</span>
+      <span class="wf-step" id="wf-prioritize">PRIORITIZE</span>
+      <span class="wf-arrow">→</span>
+      <span class="wf-step" id="wf-remediate">REMEDIATE</span>
+      <span class="wf-arrow">→</span>
+      <span class="wf-step" id="wf-validate">VALIDATE</span>
+    </div>
+  </div>
+</header>
+
+<!-- ─── MAIN ──────────────────────────────────────────────────────── -->
+<main class="container">
+
+  <!-- Actions -->
+  <section class="actions-row">
+    <div class="action-card">
+      <div class="action-meta">
+        <span class="action-label">Step 1</span>
+        <strong class="action-title">Scan Codebase</strong>
+        <p class="action-desc">Run all detectors on <code>sample_codebase/</code> and prioritize findings.</p>
+      </div>
+      <button id="btn-scan" class="btn btn-primary" onclick="runScan()">
+        <span class="btn-icon">&#9654;</span> Scan Codebase
+      </button>
+    </div>
+    <div class="action-card">
+      <div class="action-meta">
+        <span class="action-label">Step 2</span>
+        <strong class="action-title">Remediate &amp; Validate</strong>
+        <p class="action-desc">Apply patches to <code>output/patched/</code>, re-scan, and compare before/after.</p>
+      </div>
+      <button id="btn-fix" class="btn btn-secondary" onclick="runFix()">
+        <span class="btn-icon">&#10003;</span> Remediate &amp; Validate
+      </button>
+    </div>
+  </section>
+
+  <!-- Status banner -->
+  <div id="status-banner" class="status-banner hidden"></div>
+
+  <!-- ── SCAN RESULTS ──────────────────────────────────────────────── -->
+  <section id="scan-results" class="results-section hidden">
+    <h2 class="section-title">Scan Results</h2>
+
+    <!-- Summary counts -->
+    <div class="summary-grid" id="scan-summary">
+      <div class="summary-card total">
+        <div class="summary-number" id="scan-total">–</div>
+        <div class="summary-label">Total Findings</div>
+      </div>
+      <div class="summary-card critical">
+        <div class="summary-number" id="scan-critical">–</div>
+        <div class="summary-label">Critical</div>
+      </div>
+      <div class="summary-card high">
+        <div class="summary-number" id="scan-high">–</div>
+        <div class="summary-label">High</div>
+      </div>
+      <div class="summary-card medium">
+        <div class="summary-number" id="scan-medium">–</div>
+        <div class="summary-label">Medium</div>
+      </div>
+      <div class="summary-card low">
+        <div class="summary-number" id="scan-low">–</div>
+        <div class="summary-label">Low</div>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="categories-row">
+      <span class="cat-tag cat-secrets">Hardcoded Secrets</span>
+      <span class="cat-tag cat-long">Long Functions</span>
+      <span class="cat-tag cat-dup">Code Duplication</span>
+      <span class="cat-tag cat-err">Missing Error Handling</span>
+      <span class="cat-tag cat-dead">Dead Code</span>
+    </div>
+
+    <!-- Findings table -->
+    <div class="table-wrap">
+      <table class="findings-table" id="scan-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Severity</th>
+            <th>Category</th>
+            <th>File</th>
+            <th>Line</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody id="scan-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── FIX RESULTS ───────────────────────────────────────────────── -->
+  <section id="fix-results" class="results-section hidden">
+    <h2 class="section-title">Remediation &amp; Validation Results</h2>
+
+    <!-- Before → Resolved → After funnel -->
+    <div class="funnel-row">
+      <div class="funnel-card funnel-before">
+        <div class="funnel-number" id="fix-before">–</div>
+        <div class="funnel-label">Findings<br><small>Before</small></div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+      <div class="funnel-card funnel-resolved">
+        <div class="funnel-number" id="fix-resolved">–</div>
+        <div class="funnel-label">Resolved<br><small>by Remediator</small></div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+      <div class="funnel-card funnel-after">
+        <div class="funnel-number" id="fix-after">–</div>
+        <div class="funnel-label">Remaining<br><small>After</small></div>
+      </div>
+    </div>
+
+    <!-- Before / After side-by-side -->
+    <div class="before-after-grid">
+      <!-- Before -->
+      <div class="ba-panel">
+        <h3 class="ba-title ba-before-title">Before Remediation</h3>
+        <div class="table-wrap">
+          <table class="findings-table findings-table-sm">
+            <thead>
+              <tr><th>Sev.</th><th>Category</th><th>File</th><th>Ln</th></tr>
+            </thead>
+            <tbody id="fix-before-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- After -->
+      <div class="ba-panel">
+        <h3 class="ba-title ba-after-title">After Remediation</h3>
+        <div class="table-wrap">
+          <table class="findings-table findings-table-sm">
+            <thead>
+              <tr><th>Sev.</th><th>Category</th><th>File</th><th>Ln</th></tr>
+            </thead>
+            <tbody id="fix-after-tbody"></tbody>
+          </table>
+        </div>
+        <!-- Limitations note -->
+        <div class="limitations-note">
+          <strong>Known limitations</strong>
+          <ul>
+            <li>Long functions are detected but not structurally extracted by the safe text-level remediator (a TODO comment is inserted instead).</li>
+            <li>One residual dead-code finding may remain after remediation.</li>
+            <li>Current prototype is Python-only.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HOW IT WORKS ──────────────────────────────────────────────── -->
+  <section class="info-section">
+    <h2 class="section-title">How It Works</h2>
+    <ol class="how-list">
+      <li><strong>Scan</strong> — Walk the sample Python codebase and parse each file into an AST.</li>
+      <li><strong>Detect</strong> — Five detectors identify hardcoded secrets, long functions, code duplication, missing error handling, and dead code.</li>
+      <li><strong>Prioritize</strong> — Findings are ranked by severity (critical → high → medium → low).</li>
+      <li><strong>Remediate</strong> — Safe text-level patches are applied to a separate <code>output/patched/</code> copy — the original codebase is never modified.</li>
+      <li><strong>Validate</strong> — The patched copy is re-scanned and results are compared before and after.</li>
+    </ol>
+  </section>
+
+  <!-- ── ABOUT ──────────────────────────────────────────────────────── -->
+  <section class="info-section about-section">
+    <h2 class="section-title">About This Prototype</h2>
+    <p>
+      This is a self-contained local developer tool created for the <strong>IBM Bob 2.0 Hackathon</strong>.
+      It runs entirely on your machine — no external APIs, no cloud services, no credentials, and no personal data.
+      The built-in <code>sample_codebase/</code> is a synthetic Python project designed to exercise all five
+      technical-debt categories supported by the pipeline.
+    </p>
+    <p>
+      The full pipeline is also available from the command line:
+    </p>
+    <pre class="code-block">python main.py scan
+python main.py fix</pre>
+  </section>
+
+</main>
+
+<!-- ─── FOOTER ────────────────────────────────────────────────────── -->
+<footer class="site-footer">
+  <div class="container">
+    Technical Debt Assistant &mdash; IBM Bob 2.0 Hackathon Prototype
+  </div>
+</footer>
+
+<!-- ─── JAVASCRIPT ────────────────────────────────────────────────── -->
+<script>
+const SEVERITY_CLASS = {
+  critical: "sev-critical",
+  high:     "sev-high",
+  medium:   "sev-medium",
+  low:      "sev-low",
+};
+
+const CATEGORY_LABEL = {
+  hardcoded_secrets:      "Hardcoded Secrets",
+  long_functions:         "Long Functions",
+  code_duplication:       "Code Duplication",
+  missing_error_handling: "Missing Error Handling",
+  dead_code:              "Dead Code",
+};
+
+function shortFile(path) {
+  // show only filename, not full path
+  return path.replace(/\\/g, "/").split("/").pop();
+}
+
+function setStatus(msg, type) {
+  // type: "running" | "ok" | "error"
+  const el = document.getElementById("status-banner");
+  el.textContent = msg;
+  el.className = "status-banner status-" + type;
+}
+
+function hideStatus() {
+  document.getElementById("status-banner").className = "status-banner hidden";
+}
+
+function setWorkflowStep(steps) {
+  // steps: array of step ids that should be "active"
+  ["wf-scan","wf-detect","wf-prioritize","wf-remediate","wf-validate"].forEach(id => {
+    document.getElementById(id).classList.remove("wf-active");
+  });
+  steps.forEach(id => document.getElementById(id).classList.add("wf-active"));
+}
+
+function buildScanRow(f, index) {
+  const tr = document.createElement("tr");
+  tr.innerHTML =
+    `<td>${index}</td>` +
+    `<td><span class="sev-badge ${SEVERITY_CLASS[f.severity] || ''}">${f.severity.toUpperCase()}</span></td>` +
+    `<td>${CATEGORY_LABEL[f.category] || f.category}</td>` +
+    `<td class="cell-file" title="${f.file}">${shortFile(f.file)}</td>` +
+    `<td>${f.line}</td>` +
+    `<td class="cell-desc">${escHtml(f.description)}</td>`;
+  return tr;
+}
+
+function buildSmallRow(f) {
+  const tr = document.createElement("tr");
+  tr.innerHTML =
+    `<td><span class="sev-badge ${SEVERITY_CLASS[f.severity] || ''}">${f.severity.toUpperCase()}</span></td>` +
+    `<td>${CATEGORY_LABEL[f.category] || f.category}</td>` +
+    `<td class="cell-file" title="${f.file}">${shortFile(f.file)}</td>` +
+    `<td>${f.line}</td>`;
+  return tr;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+async function runScan() {
+  const btn = document.getElementById("btn-scan");
+  btn.disabled = true;
+  setStatus("⟳  Running scan pipeline…", "running");
+  setWorkflowStep(["wf-scan","wf-detect","wf-prioritize"]);
+
+  document.getElementById("scan-results").classList.add("hidden");
+  document.getElementById("fix-results").classList.add("hidden");
+
+  try {
+    const resp = await fetch("/api/scan", { method: "POST" });
+    const data = await resp.json();
+
+    if (data.status !== "ok") throw new Error(data.message || "Unknown error");
+
+    // Populate summary
+    document.getElementById("scan-total").textContent    = data.total;
+    document.getElementById("scan-critical").textContent = data.counts.critical;
+    document.getElementById("scan-high").textContent     = data.counts.high;
+    document.getElementById("scan-medium").textContent   = data.counts.medium;
+    document.getElementById("scan-low").textContent      = data.counts.low;
+
+    // Populate findings table
+    const tbody = document.getElementById("scan-tbody");
+    tbody.innerHTML = "";
+    data.findings.forEach((f, i) => tbody.appendChild(buildScanRow(f, i + 1)));
+
+    document.getElementById("scan-results").classList.remove("hidden");
+    setStatus(`✓  Scan complete — ${data.total} finding(s) detected.`, "ok");
+  } catch (err) {
+    setStatus("✗  Scan failed: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runFix() {
+  const btn = document.getElementById("btn-fix");
+  btn.disabled = true;
+  setStatus("⟳  Running remediation & validation pipeline…", "running");
+  setWorkflowStep(["wf-scan","wf-detect","wf-prioritize","wf-remediate","wf-validate"]);
+
+  document.getElementById("fix-results").classList.add("hidden");
+
+  try {
+    const resp = await fetch("/api/fix", { method: "POST" });
+    const data = await resp.json();
+
+    if (data.status !== "ok") throw new Error(data.message || "Unknown error");
+
+    // Funnel numbers
+    document.getElementById("fix-before").textContent   = data.before;
+    document.getElementById("fix-resolved").textContent = data.resolved;
+    document.getElementById("fix-after").textContent    = data.after;
+
+    // Before table
+    const tbodyB = document.getElementById("fix-before-tbody");
+    tbodyB.innerHTML = "";
+    data.before_findings.forEach(f => tbodyB.appendChild(buildSmallRow(f)));
+
+    // After table
+    const tbodyA = document.getElementById("fix-after-tbody");
+    tbodyA.innerHTML = "";
+    if (data.after_findings.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="4" class="cell-empty">No remaining findings.</td>`;
+      tbodyA.appendChild(tr);
+    } else {
+      data.after_findings.forEach(f => tbodyA.appendChild(buildSmallRow(f)));
+    }
+
+    document.getElementById("fix-results").classList.remove("hidden");
+
+    // Also refresh scan summary to match
+    document.getElementById("scan-total").textContent    = data.before;
+    document.getElementById("scan-critical").textContent = data.before_counts.critical;
+    document.getElementById("scan-high").textContent     = data.before_counts.high;
+    document.getElementById("scan-medium").textContent   = data.before_counts.medium;
+    document.getElementById("scan-low").textContent      = data.before_counts.low;
+    const tbody = document.getElementById("scan-tbody");
+    tbody.innerHTML = "";
+    data.before_findings.forEach((f, i) => tbody.appendChild(buildScanRow(f, i + 1)));
+    document.getElementById("scan-results").classList.remove("hidden");
+
+    setStatus(
+      `✓  Remediation complete — ${data.before} → ${data.after} findings remaining (${data.resolved} resolved).`,
+      "ok"
+    );
+  } catch (err) {
+    setStatus("✗  Remediation failed: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
