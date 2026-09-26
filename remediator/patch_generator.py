@@ -122,20 +122,33 @@ def _apply_code_duplication(lines: list, line_no: int, dup_index: int) -> list:
 def _dedup_dup_findings(dup_findings: list) -> list:
     """
     Multiple code_duplication findings may point to overlapping 6-line windows
-    within the same duplicate block.  Keep only the finding with the smallest
-    line number so we replace the whole block exactly once.
+    within the same duplicate block.  Collapse each run of overlapping windows
+    into a single representative, keeping the *last* (highest line number) in
+    each overlapping group.  The last window is chosen because it is the one
+    whose 6-line span reaches furthest into the block, which ensures that lines
+    like ``results.append(entry)`` — present in the later window but not the
+    earlier one — are also covered by the replacement.
     """
     if not dup_findings:
         return []
 
-    # Sort by line ascending
+    # Sort by line ascending so we can walk through overlapping groups
     sorted_f = sorted(dup_findings, key=lambda f: f.line)
     kept = []
-    next_safe = 0  # lines below this index have already been claimed
-    for f in sorted_f:
-        if f.line > next_safe:
-            kept.append(f)
-            next_safe = f.line + _WINDOW - 1  # skip overlapping windows
+    group_start = 0  # start index of the current overlap group in sorted_f
+
+    i = 1
+    while i <= len(sorted_f):
+        # Check whether sorted_f[i] is still overlapping with sorted_f[i-1]
+        if i < len(sorted_f) and sorted_f[i].line < sorted_f[i - 1].line + _WINDOW:
+            # Still in the same overlapping group — advance
+            i += 1
+        else:
+            # End of group: keep the last finding in the group (highest line)
+            kept.append(sorted_f[i - 1])
+            group_start = i
+            i += 1
+
     return kept
 
 

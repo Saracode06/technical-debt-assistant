@@ -1,4 +1,4 @@
-﻿import ast
+import ast
 
 from detectors.base_detector import Finding
 from scanner.file_scanner import FileModel
